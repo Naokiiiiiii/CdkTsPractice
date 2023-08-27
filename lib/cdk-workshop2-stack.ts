@@ -1,5 +1,7 @@
 import { CfnOutput, Stack, StackProps } from 'aws-cdk-lib'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2'
+import * as targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets'
 import * as rds from 'aws-cdk-lib/aws-rds'
 import { Construct } from 'constructs'
 import { readFileSync } from 'fs'
@@ -22,7 +24,7 @@ export class CdkWorkshop2Stack extends Stack {
     const script = readFileSync('./lib/resources/user-data.sh', 'utf8')
     webServer1.addUserData(script)
 
-    webServer1.connections.allowFromAnyIpv4(ec2.Port.tcp(80))
+    // webServer1.connections.allowFromAnyIpv4(ec2.Port.tcp(80))
 
     new CfnOutput(this, 'WordPressServer1PublicIPAdress', {
       value: `http://${webServer1.instancePublicIp}`,
@@ -36,5 +38,24 @@ export class CdkWorkshop2Stack extends Stack {
     })
 
     dbServer.connections.allowDefaultPortFrom(webServer1)
+
+    const alb = new elbv2.ApplicationLoadBalancer(this, 'LoadBalancer', {
+      vpc,
+      internetFacing: true,
+    })
+
+    const listener = alb.addListener('listener', {
+      port: 80,
+    })
+
+    listener.addTargets('ApplicationFleet', {
+      port: 80,
+      targets: [new targets.InstanceTarget(webServer1, 80)],
+      healthCheck: {
+        path: '/wp-includes/images/blank.gif',
+      },
+    })
+
+    webServer1.connections.allowFrom(alb, ec2.Port.tcp(80))
   }
 }
