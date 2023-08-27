@@ -18,14 +18,20 @@ export class CdkWorkshop2Stack extends Stack {
       vpc,
     })
 
+    const webServer2 = new WebServerInstance(this, 'WebServer2', {
+      vpc,
+    })
+
     const dbServer = new rds.DatabaseInstance(this, 'WordPressDB', {
       vpc,
       engine: rds.DatabaseInstanceEngine.mysql({ version: rds.MysqlEngineVersion.VER_8_0_31 }),
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T2, ec2.InstanceSize.SMALL),
       databaseName: 'wordpress',
+      multiAz: true,
     })
 
     dbServer.connections.allowDefaultPortFrom(webServer1.instance)
+    dbServer.connections.allowDefaultPortFrom(webServer2.instance)
 
     const alb = new elbv2.ApplicationLoadBalancer(this, 'LoadBalancer', {
       vpc,
@@ -38,12 +44,13 @@ export class CdkWorkshop2Stack extends Stack {
 
     listener.addTargets('ApplicationFleet', {
       port: 80,
-      targets: [new targets.InstanceTarget(webServer1.instance, 80)],
+      targets: [new targets.InstanceTarget(webServer1.instance, 80), new targets.InstanceTarget(webServer2.instance, 80)],
       healthCheck: {
         path: '/wp-includes/images/blank.gif',
       },
     })
 
     webServer1.instance.connections.allowFrom(alb, ec2.Port.tcp(80))
+    webServer2.instance.connections.allowFrom(alb, ec2.Port.tcp(80))
   }
 }
